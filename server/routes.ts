@@ -858,7 +858,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const email = lead.email ? String(lead.email).trim() : null;
           const phone = lead.phone ? String(lead.phone).trim() : null;
           const website = lead.website ? String(lead.website).trim() : null;
-          const category = lead.category ? String(lead.category).trim() : (defaultCategory || null);
+          // User's selected category takes priority over Google's category
+          const category = defaultCategory 
+            ? String(defaultCategory).trim() 
+            : (lead.category ? String(lead.category).trim() : null);
 
           // Validation: name is required
           if (!name) {
