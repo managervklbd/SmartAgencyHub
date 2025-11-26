@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Globe, Phone, Mail, Building2, Loader2, Import, ChevronDown, ChevronUp, Plus, AlertCircle } from "lucide-react";
+import { Search, Globe, Phone, Mail, Building2, Loader2, Import, ChevronDown, ChevronUp, Plus, AlertCircle, CheckCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +120,8 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
   const [selectedSource, setSelectedSource] = useState<string>("Smart Lead Finder");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [showImportOptions, setShowImportOptions] = useState(false);
+  const [isLoadingAllPages, setIsLoadingAllPages] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ loaded: 0, total: 0 });
 
   const searchMutation = useMutation({
     mutationFn: async (page: number) => {
@@ -231,6 +233,75 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
       setSelectedIds(new Set(results.map((_, i) => i)));
     } else {
       setSelectedIds(new Set());
+    }
+  };
+
+  // Fetch ALL remaining pages and select ALL results
+  const handleSelectAllAcrossPages = async () => {
+    if (isLoadingAllPages) return;
+    
+    // If all results are already loaded, just select all
+    if (!hasMore) {
+      setSelectedIds(new Set(results.map((_, i) => i)));
+      toast({
+        title: "All Selected",
+        description: `Selected all ${results.length} leads`,
+      });
+      return;
+    }
+    
+    setIsLoadingAllPages(true);
+    setLoadingProgress({ loaded: results.length, total: totalResults });
+    
+    try {
+      let page = currentPage;
+      let allResults = [...results];
+      let morePages: boolean = hasMore;
+      let prevTotal = totalResults;
+      
+      // Keep fetching until no more pages
+      while (morePages) {
+        page++;
+        const response = await apiRequest("POST", "/api/leads/smart-finder/search", {
+          keyword: searchKeyword,
+          location: searchLocation || undefined,
+          page,
+          perPage: 40,
+          previousTotal: prevTotal,
+        }) as SearchResponse;
+        
+        allResults = [...allResults, ...response.results];
+        morePages = response.hasMore;
+        prevTotal = Math.max(response.totalResults || allResults.length, prevTotal);
+        
+        // Update progress
+        setLoadingProgress({ loaded: allResults.length, total: prevTotal });
+        setResults(allResults);
+        setCurrentPage(page);
+        setHasMore(morePages);
+        setTotalResults(prevTotal);
+      }
+      
+      // Now select all
+      setSelectedIds(new Set(allResults.map((_, i) => i)));
+      
+      // Expand all categories
+      const cats = new Set(allResults.map(r => r.category || "Uncategorized"));
+      setExpandedCategories(cats);
+      
+      toast({
+        title: "All Loaded & Selected",
+        description: `Loaded and selected all ${allResults.length} leads`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error Loading All Pages",
+        description: error.message || "Failed to load all results",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingAllPages(false);
+      setLoadingProgress({ loaded: 0, total: 0 });
     }
   };
 
@@ -371,6 +442,44 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Select All Across All Pages Button */}
+                  <Button
+                    data-testid="button-select-all-pages"
+                    onClick={handleSelectAllAcrossPages}
+                    disabled={isLoadingAllPages || searchMutation.isPending}
+                    variant="outline"
+                    size="sm"
+                  >
+                    {isLoadingAllPages ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading {loadingProgress.loaded}/{loadingProgress.total}...
+                      </>
+                    ) : selectedIds.size === results.length && results.length === totalResults ? (
+                      <>
+                        <CheckCheck className="h-4 w-4 mr-2" />
+                        All {totalResults} Selected
+                      </>
+                    ) : (
+                      <>
+                        <CheckCheck className="h-4 w-4 mr-2" />
+                        Select All ({totalResults})
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Clear Selection */}
+                  {selectedIds.size > 0 && (
+                    <Button
+                      data-testid="button-clear-selection"
+                      onClick={() => setSelectedIds(new Set())}
+                      variant="ghost"
+                      size="sm"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                  
                   {selectedIds.size > 0 && (
                     <Button
                       data-testid="button-import-selected"
