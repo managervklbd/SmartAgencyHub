@@ -829,6 +829,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Smart Lead Finder - Search ALL results at once (for Select All functionality)
+  app.post("/api/leads/smart-finder/search-all", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      // Only admin and operational_head can use smart lead finder
+      if (req.userRole !== "admin" && req.userRole !== "operational_head") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { keyword, location } = req.body;
+
+      if (!keyword || typeof keyword !== "string" || keyword.trim().length < 2) {
+        return res.status(400).json({ error: "Please provide a valid search keyword (at least 2 characters)" });
+      }
+
+      if (!location || typeof location !== "string" || location.trim().length < 2) {
+        return res.status(400).json({ error: "Please provide a location for business search" });
+      }
+
+      if (!serpApiService.isConfigured()) {
+        return res.status(500).json({ error: "Smart Lead Finder is not configured. Please add SERPAPI_KEY to your secrets." });
+      }
+
+      // Fetch ALL results at once
+      const searchResults = await serpApiService.searchAllBusinesses({
+        keyword: keyword.trim(),
+        location: location.trim(),
+      });
+
+      res.json({
+        keyword: keyword.trim(),
+        location: location.trim(),
+        results: searchResults.results,
+        totalResults: searchResults.totalResults,
+      });
+    } catch (error: any) {
+      console.error("Smart Lead Finder search-all error:", error.message);
+      res.status(500).json({ error: error.message || "Failed to search for businesses" });
+    }
+  });
+
   // Smart Lead Finder - Bulk import selected leads
   app.post("/api/leads/smart-finder/import", authenticateToken, auditMiddleware("create", "lead"), async (req: AuthRequest, res) => {
     try {
@@ -858,8 +898,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const email = lead.email ? String(lead.email).trim() : null;
           const phone = lead.phone ? String(lead.phone).trim() : null;
           const website = lead.website ? String(lead.website).trim() : null;
-          // User's selected category takes priority over Google's category
-          const category = defaultCategory 
+          // User's selected category takes priority, but fall back to API's category if user didn't select one
+          // Using nullish coalescing (??) to preserve API data when user leaves selector blank
+          const category = (defaultCategory && defaultCategory.trim())
             ? String(defaultCategory).trim() 
             : (lead.category ? String(lead.category).trim() : null);
 
@@ -884,10 +925,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Check for duplicates by email or website
+          // Check for duplicates by email, website, OR business name
           let isDuplicate = false;
           let duplicateReason = "";
 
+          // 1. Check by email
           if (email) {
             const existingByEmail = await db.select().from(leads).where(eq(leads.email, email)).limit(1);
             if (existingByEmail.length > 0) {
@@ -896,11 +938,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
+          // 2. Check by website
           if (!isDuplicate && website) {
             const existingByWebsite = await db.select().from(leads).where(eq(leads.website, website)).limit(1);
             if (existingByWebsite.length > 0) {
               isDuplicate = true;
               duplicateReason = `Website "${website}" already exists`;
+            }
+          }
+
+          // 3. Check by business name (normalized: lowercase, trim, remove common punctuation)
+          if (!isDuplicate && name) {
+            // Normalize the name: lowercase, trim, remove periods and common suffixes
+            const normalizedName = name.toLowerCase().trim()
+              .replace(/[.,\-]/g, '')
+              .replace(/\s+/g, ' ')
+              .replace(/\s*(ltd|llc|inc|corp|co|company|limited|pvt|private)\.?\s*$/i, '');
+            
+            const existingByName = await db.select().from(leads).where(
+              sql`LOWER(REGEXP_REPLACE(REGEXP_REPLACE(${leads.name}, '[.,\-]', '', 'g'), '\s*(ltd|llc|inc|corp|co|company|limited|pvt|private)\.?\s*$', '', 'i')) = ${normalizedName}`
+            ).limit(1);
+            if (existingByName.length > 0) {
+              isDuplicate = true;
+              duplicateReason = `Business name "${name}" already exists (similar to "${existingByName[0].name}")`;
             }
           }
 

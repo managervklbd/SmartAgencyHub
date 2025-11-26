@@ -1,0 +1,86 @@
+Hi, I need your help urgently with the Smart Lead Finder issues.
+The current behaviour is causing wrong results, duplicates and the “Select All” function is still not working properly. Here is the exact problem list:
+
+1. “Select All” is still not working
+
+When I search for leads, for example:
+
+software company in Chittagong
+
+Total results show: 184
+
+But “Select All” selects only 63 or 70 or 80, not all 184
+
+I have to repeatedly load pages and re-select, which is not professional and not usable.
+
+✔ I need “Select All” to select ALL results at once — no matter 50, 100, 500, or 5,000.
+✔ Even if I click pagination, it must still remain selected.
+
+2. Duplicate leads are still being added
+
+Even if the lead already exists (same email / same website), Smart Lead Finder still adds the same business again.
+
+✔ I need strict duplicate protection:
+
+Match by email
+
+OR match by website
+
+OR match by business name
+If any match exists → Skip automatically, do not add duplicate.
+
+3. Category saving is not working correctly
+
+After import, all leads are saved under Smart Lead Finder category instead of the category I selected.
+
+✔ Requirement:
+When importing, the selected category must be saved in the lead entry.
+Example:
+If I select “Software company” → all imported leads must show “Software company” in the Leads page.
+
+4. Data inconsistency: Result count vs actual data
+
+Example:
+
+Found 184 results
+
+But only 60–70 results actually load
+
+And Select All only selects those partial results
+
+This means pagination is not fully loaded and the internal state is inconsistent.
+
+✔ Need a fix so the system loads 100% of results before import selection.
+OR
+✔ Provide a backend solution to fetch ALL results at once.
+
+5. Want your recommended improvements applied
+
+Whatever you suggested before regarding:
+
+Accurate pagination
+
+Full dataset loading
+
+Eliminating partial pages
+
+Proper filtering
+
+Accurate Google Local + Maps handling
+
+Please apply the final stable and professional solution, not intermediate experiments.
+
+⚠️ Summary of what I need done
+
+Select All must select ALL results, no matter how many pages.
+
+Strict duplicate protection (email / website / business name).
+
+Correct category saving during import.
+
+Accurate result count & full loading of all results.
+
+Stable, professional implementation—not experimental.
+
+Please fix these issues completely.
+Thanks!

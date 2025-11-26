@@ -63,6 +63,13 @@ interface SearchResponse {
   hasMore: boolean;
 }
 
+interface SearchAllResponse {
+  keyword: string;
+  location: string;
+  results: BusinessResult[];
+  totalResults: number;
+}
+
 interface ImportResponse {
   message: string;
   success: number;
@@ -236,67 +243,67 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
     }
   };
 
-  // Fetch ALL remaining pages and select ALL results
+  // Fetch ALL results at once using the search-all endpoint
   const handleSelectAllAcrossPages = async () => {
     if (isLoadingAllPages) return;
     
-    // If all results are already loaded, just select all
-    if (!hasMore) {
-      setSelectedIds(new Set(results.map((_, i) => i)));
+    const searchKw = searchKeyword || keyword.trim();
+    const searchLoc = searchLocation || location.trim();
+    
+    // If no location provided, can't use search-all
+    if (!searchLoc) {
       toast({
-        title: "All Selected",
-        description: `Selected all ${results.length} leads`,
+        title: "Location Required",
+        description: "Please provide a location to load all results",
+        variant: "destructive",
       });
       return;
     }
     
+    // Store previous state in case of error
+    const previousResults = [...results];
+    const previousSelectedIds = new Set(selectedIds);
+    const previousTotalResults = totalResults;
+    
     setIsLoadingAllPages(true);
-    setLoadingProgress({ loaded: results.length, total: totalResults });
+    // Show more accurate progress - start at current count
+    setLoadingProgress({ loaded: results.length, total: Math.max(totalResults, results.length) });
     
     try {
-      let page = currentPage;
-      let allResults = [...results];
-      let morePages: boolean = hasMore;
-      let prevTotal = totalResults;
+      // Use the search-all endpoint to fetch ALL results at once
+      const response = await apiRequest("POST", "/api/leads/smart-finder/search-all", {
+        keyword: searchKw,
+        location: searchLoc,
+      }) as SearchAllResponse;
       
-      // Keep fetching until no more pages
-      while (morePages) {
-        page++;
-        const response = await apiRequest("POST", "/api/leads/smart-finder/search", {
-          keyword: searchKeyword,
-          location: searchLocation || undefined,
-          page,
-          perPage: 40,
-          previousTotal: prevTotal,
-        }) as SearchResponse;
-        
-        allResults = [...allResults, ...response.results];
-        morePages = response.hasMore;
-        prevTotal = Math.max(response.totalResults || allResults.length, prevTotal);
-        
-        // Update progress
-        setLoadingProgress({ loaded: allResults.length, total: prevTotal });
-        setResults(allResults);
-        setCurrentPage(page);
-        setHasMore(morePages);
-        setTotalResults(prevTotal);
-      }
+      // Update all state with complete results
+      setResults(response.results);
+      setTotalResults(response.totalResults);
+      setHasMore(false); // All results are now loaded
+      setCurrentPage(1);
+      setSearchKeyword(response.keyword);
+      setSearchLocation(response.location);
       
-      // Now select all
-      setSelectedIds(new Set(allResults.map((_, i) => i)));
+      // Select ALL results
+      setSelectedIds(new Set(response.results.map((_, i) => i)));
       
       // Expand all categories
-      const cats = new Set(allResults.map(r => r.category || "Uncategorized"));
+      const cats = new Set(response.results.map(r => r.category || "Uncategorized"));
       setExpandedCategories(cats);
       
       toast({
-        title: "All Loaded & Selected",
-        description: `Loaded and selected all ${allResults.length} leads`,
+        title: "All Results Loaded & Selected",
+        description: `Loaded and selected all ${response.totalResults} leads`,
       });
     } catch (error: any) {
+      // On error, restore previous state and selections
+      setResults(previousResults);
+      setSelectedIds(previousSelectedIds);
+      setTotalResults(previousTotalResults);
+      
       toast({
-        title: "Error Loading All Pages",
-        description: error.message || "Failed to load all results",
+        title: "Error Loading All Results",
+        description: error.message || "Failed to load all results. Your previous selections are preserved.",
         variant: "destructive",
       });
     } finally {

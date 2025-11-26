@@ -26,6 +26,11 @@ interface SearchResults {
   hasMore: boolean;
 }
 
+interface SearchAllResults {
+  results: BusinessResult[];
+  totalResults: number;
+}
+
 interface SerpApiLocalResponse {
   local_results?: Array<{
     title?: string;
@@ -466,6 +471,104 @@ class SerpApiService {
        "dhaka", "chittagong", "sylhet", "khulna", "rajshahi"].includes(w)
     );
     return categoryWords.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || "General";
+  }
+
+  // Fetch ALL results in one go (for Select All functionality)
+  async searchAllBusinesses(options: { keyword: string; location?: string }): Promise<SearchAllResults> {
+    if (!this.apiKey) {
+      throw new Error("SERPAPI_KEY not configured");
+    }
+
+    const { keyword, location } = options;
+    const allResults: BusinessResult[] = [];
+    const seenDomains = new Set<string>();
+    const seenNames = new Set<string>();
+
+    try {
+      console.log(`SerpAPI: Fetching ALL results for "${keyword}" ${location ? `in ${location}` : ''}`);
+
+      // Geocode location
+      if (!location) {
+        throw new Error("Location is required for business search");
+      }
+
+      const coordinates = await this.geocodeLocation(location);
+      if (!coordinates) {
+        throw new Error(`Unable to find location: "${location}". Please check the spelling or try a different location.`);
+      }
+
+      console.log(`Geocoded "${location}" to ${coordinates}`);
+
+      const RAW_PER_CALL = 20; // Google Maps returns 20 per call
+      const MAX_PAGES = 15; // Safety limit: max 300 raw results (15 × 20)
+      let offset = 0;
+      let serpApiTotal = 0;
+      let consecutiveEmpty = 0;
+
+      // Keep fetching until API exhausted or max pages reached
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { results: mapsResults, totalResults: mapsTotal } = await this.searchGoogleMapsWithMeta(
+          keyword,
+          coordinates,
+          offset,
+          RAW_PER_CALL
+        );
+
+        if (mapsTotal > serpApiTotal) {
+          serpApiTotal = mapsTotal;
+        }
+
+        // Merge with deduplication
+        const beforeCount = allResults.length;
+        this.mergeResults(allResults, mapsResults, seenDomains, seenNames);
+        const newAdded = allResults.length - beforeCount;
+
+        offset += RAW_PER_CALL;
+
+        // Stop conditions:
+        // 1. Got fewer results than requested (API exhausted)
+        if (mapsResults.length < RAW_PER_CALL) {
+          console.log(`API exhausted at offset ${offset - RAW_PER_CALL} (got ${mapsResults.length}/${RAW_PER_CALL})`);
+          break;
+        }
+
+        // 2. No new unique results in 2 consecutive calls (all duplicates)
+        if (newAdded === 0) {
+          consecutiveEmpty++;
+          if (consecutiveEmpty >= 2) {
+            console.log(`Stopping: No new unique results for ${consecutiveEmpty} consecutive calls`);
+            break;
+          }
+        } else {
+          consecutiveEmpty = 0;
+        }
+
+        // 3. Reached API's reported total
+        if (serpApiTotal > 0 && offset >= serpApiTotal) {
+          console.log(`Reached API's reported total: ${serpApiTotal}`);
+          break;
+        }
+
+        // Small delay between API calls to be respectful
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Filter for qualified businesses
+      const filtered = allResults.filter(business => 
+        business.email || business.phone || business.website || business.address
+      );
+
+      console.log(`SerpAPI Search All: Raw=${allResults.length}, Qualified=${filtered.length}, Offset=${offset}`);
+
+      return {
+        results: filtered,
+        totalResults: filtered.length,
+      };
+
+    } catch (error: any) {
+      console.error("SerpAPI searchAll error:", error.message);
+      throw error;
+    }
   }
 }
 
