@@ -837,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const { selectedLeads, defaultCategory } = req.body;
+      const { selectedLeads, defaultCategory, defaultSource } = req.body;
 
       if (!Array.isArray(selectedLeads) || selectedLeads.length === 0) {
         return res.status(400).json({ error: "Please select at least one lead to import" });
@@ -921,7 +921,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const followUpDate = new Date();
           followUpDate.setDate(followUpDate.getDate() + 7);
 
-          // Insert lead
+          // Insert lead with user-selected source or default
+          const source = defaultSource 
+            ? String(defaultSource).trim() 
+            : "Smart Lead Finder";
+            
           const [newLead] = await db.insert(leads).values({
             name,
             email,
@@ -929,7 +933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             website,
             category,
             status: "new",
-            source: "Smart Lead Finder",
+            source,
             notes: notesArr.length > 0 ? notesArr.join("\n") : null,
             followUpDate,
           }).returning();

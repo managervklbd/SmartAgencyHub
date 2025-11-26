@@ -117,6 +117,7 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedSource, setSelectedSource] = useState<string>("Smart Lead Finder");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [showImportOptions, setShowImportOptions] = useState(false);
 
@@ -171,6 +172,7 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
       const response = await apiRequest("POST", "/api/leads/smart-finder/import", {
         selectedLeads,
         defaultCategory: selectedCategory || undefined,
+        defaultSource: selectedSource || "Smart Lead Finder",
       });
       return response as ImportResponse;
     },
@@ -399,7 +401,7 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">
-                        Default Category (optional)
+                        Category <span className="text-destructive">*</span>
                       </label>
                       <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                         <SelectTrigger data-testid="select-category">
@@ -414,7 +416,27 @@ export function SmartLeadFinder({ open, onOpenChange }: SmartLeadFinderProps) {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        If not specified, we'll use the category from the search results
+                        Select the category for imported leads
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Source
+                      </label>
+                      <Select value={selectedSource} onValueChange={setSelectedSource}>
+                        <SelectTrigger data-testid="select-source">
+                          <SelectValue placeholder="Select a source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Smart Lead Finder">Smart Lead Finder</SelectItem>
+                          <SelectItem value="Google Search">Google Search</SelectItem>
+                          <SelectItem value="Lead Finder">Lead Finder</SelectItem>
+                          <SelectItem value="Web Search">Web Search</SelectItem>
+                          <SelectItem value="Online Directory">Online Directory</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Source tracking for leads
                       </p>
                     </div>
                     <Button
