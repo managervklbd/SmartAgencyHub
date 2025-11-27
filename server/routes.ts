@@ -10297,6 +10297,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mark all notifications as read for current user
+  app.post("/api/notifications/mark-all-read", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      // Update all unread notifications for the current user
+      await db.update(notifications)
+        .set({ isRead: true })
+        .where(and(
+          eq(notifications.userId, req.userId!),
+          eq(notifications.isRead, false)
+        ));
+      
+      res.json({ success: true, message: "All notifications marked as read" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Audit Logs
   app.get("/api/audit-logs", authenticateToken, async (req: AuthRequest, res) => {
     try {

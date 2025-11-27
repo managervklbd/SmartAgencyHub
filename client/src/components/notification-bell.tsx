@@ -48,6 +48,16 @@ export function NotificationBell() {
     },
   });
 
+  // Mark all notifications as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/notifications/mark-all-read");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    },
+  });
+
   // Setup WebSocket connection for real-time notifications
   useEffect(() => {
     let wsUrl: string;
@@ -131,8 +141,17 @@ export function NotificationBell() {
     setIsOpen(false);
   };
 
+  // Handle dropdown open/close - mark all as read when opened
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    // When dropdown opens and there are unread notifications, mark all as read
+    if (open && unreadCount > 0) {
+      markAllAsReadMutation.mutate();
+    }
+  };
+
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
