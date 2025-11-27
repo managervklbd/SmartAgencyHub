@@ -6446,58 +6446,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({ margin: 40, size: "A4" });
 
       const monthNames = ["January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"];
 
-      // Add header and get the Y position after the header
-      const headerEndY = addReportHeader({
-        doc,
-        title: "Salary Slip",
-        subtitle: `${monthNames[month - 1]} ${year}`,
-        includeDate: true
-      });
+      // Compact header (no template - custom compact design)
+      // Header background
+      doc.rect(0, 0, 595, 70).fill("#F8F9FA");
+      
+      // Company Logo (smaller)
+      try {
+        const path = await import("path");
+        const logoPath = path.default.join(__dirname, "../attached_assets/Untitled design (1)_1763794635122.png");
+        doc.image(logoPath, 40, 15, { width: 50, height: 50 });
+      } catch (error) {
+        console.warn("Logo not found");
+      }
+      
+      // Company name and info (compact - right side)
+      doc.fontSize(12).font("Helvetica-Bold").fillColor("#E11D26").text("MaxTech BD", 400, 18, { width: 155, align: "right" });
+      doc.fontSize(7).font("Helvetica").fillColor("#444444")
+        .text("522, SK Mujib Road (4th Floor)", 400, 32, { width: 155, align: "right" })
+        .text("Agrabad, Chattogram | +8801843180008", 400, 42, { width: 155, align: "right" })
+        .text("info@maxtechbd.com", 400, 52, { width: 155, align: "right" });
 
-      let currentY = headerEndY + 10;
+      // Title centered
+      doc.fontSize(16).font("Helvetica-Bold").fillColor("#1E1E1E").text("SALARY SLIP", 100, 25, { width: 280, align: "center" });
+      doc.fontSize(10).font("Helvetica").fillColor("#444444").text(`${monthNames[month - 1]} ${year}`, 100, 45, { width: 280, align: "center" });
 
-      // Employee Information Section
-      doc.fontSize(11).fillColor("#E11D26").text("Employee Information", 50, currentY);
-      currentY += 20;
+      let currentY = 80;
 
-      const empInfo = [
-        ["Employee Name:", employee.user?.fullName || "Unknown"],
+      // Employee Information Section - 2 columns layout
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#E11D26").text("Employee Information", 40, currentY);
+      currentY += 15;
+
+      // Draw a light background box for employee info
+      doc.rect(40, currentY, 515, 50).fill("#FAFAFA").stroke("#E5E7EB");
+      currentY += 8;
+
+      const empInfoLeft = [
+        ["Name:", employee.user?.fullName || "Unknown"],
         ["Employee ID:", employee.employeeId || "N/A"],
-        ["Department:", employee.department?.name || "N/A"],
+        ["Department:", employee.department?.name || "N/A"]
+      ];
+      const empInfoRight = [
         ["Designation:", employee.designation?.title || "N/A"],
         ["Working Days:", `${payrollRecord.workingDays} days`],
-        ["Payment Status:", payrollRecord.status || "draft"]
+        ["Status:", payrollRecord.status || "draft"]
       ];
 
-      empInfo.forEach(([label, value]) => {
-        doc.fontSize(10).fillColor("#000000")
-          .text(label, 50, currentY, { width: 150, continued: false })
-          .text(value, 220, currentY);
-        currentY += 20;
+      empInfoLeft.forEach(([label, value], i) => {
+        doc.fontSize(8).font("Helvetica").fillColor("#666666").text(label, 50, currentY + i * 14, { width: 70 });
+        doc.font("Helvetica-Bold").fillColor("#000000").text(value, 120, currentY + i * 14, { width: 130 });
       });
 
-      currentY += 10;
+      empInfoRight.forEach(([label, value], i) => {
+        doc.fontSize(8).font("Helvetica").fillColor("#666666").text(label, 300, currentY + i * 14, { width: 80 });
+        doc.font("Helvetica-Bold").fillColor("#000000").text(value, 375, currentY + i * 14, { width: 150 });
+      });
+
+      currentY += 55;
 
       // Earnings and Deductions Side by Side
-      const columnWidth = 230;
-      const leftX = 50;
-      const rightX = 310;
+      const leftX = 40;
+      const rightX = 300;
       let leftY = currentY;
       let rightY = currentY;
 
-      // Earnings Section
-      doc.fontSize(11).fillColor("#16a34a").text("Earnings", leftX, leftY);
-      leftY += 20;
+      // Earnings Section Header
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#16a34a").text("Earnings", leftX, leftY);
+      leftY += 14;
 
-      const earnings = [
-        ["Basic Salary", payrollRecord.basicSalary || "0"],
-      ];
-
+      const earnings = [["Basic Salary", payrollRecord.basicSalary || "0"]];
       if (salaryStructureRecord) {
         earnings.push(
           ["House Allowance", salaryStructureRecord.houseAllowance || "0"],
@@ -6507,7 +6528,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ["Other Allowances", salaryStructureRecord.otherAllowances || "0"]
         );
       }
-
       earnings.push(["Overtime Pay", payrollRecord.overtimeAmount || "0"]);
 
       const totalEarnings = new Decimal(payrollRecord.basicSalary || "0")
@@ -6516,19 +6536,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .toFixed(2);
 
       earnings.forEach(([label, amount]) => {
-        doc.fontSize(9).fillColor("#000000")
-          .text(label, leftX, leftY, { width: 150 })
-          .text(formatCurrency(amount), leftX + 150, leftY, { width: 80, align: "right" });
-        leftY += 18;
+        doc.fontSize(8).font("Helvetica").fillColor("#000000")
+          .text(label, leftX, leftY, { width: 130 })
+          .text(formatCurrency(amount), leftX + 130, leftY, { width: 80, align: "right" });
+        leftY += 14;
       });
 
-      doc.fontSize(10).font("Helvetica-Bold").fillColor("#16a34a")
-        .text("Total Earnings", leftX, leftY, { width: 150 })
-        .text(formatCurrency(totalEarnings), leftX + 150, leftY, { width: 80, align: "right" });
+      doc.fontSize(9).font("Helvetica-Bold").fillColor("#16a34a")
+        .text("Total Earnings", leftX, leftY, { width: 130 })
+        .text(formatCurrency(totalEarnings), leftX + 130, leftY, { width: 80, align: "right" });
+      leftY += 16;
 
-      // Deductions Section
-      doc.fontSize(11).font("Helvetica-Bold").fillColor("#dc2626").text("Deductions", rightX, rightY);
-      rightY += 20;
+      // Deductions Section Header
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626").text("Deductions", rightX, rightY);
+      rightY += 14;
 
       const deductions = [
         ["Loan Deduction", payrollRecord.loanDeduction || "0"],
@@ -6542,70 +6563,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .toFixed(2);
 
       deductions.forEach(([label, amount]) => {
-        doc.fontSize(9).font("Helvetica").fillColor("#000000")
-          .text(label, rightX, rightY, { width: 130 })
-          .text(formatCurrency(amount), rightX + 130, rightY, { width: 80, align: "right" });
-        rightY += 18;
+        doc.fontSize(8).font("Helvetica").fillColor("#000000")
+          .text(label, rightX, rightY, { width: 140 })
+          .text(formatCurrency(amount), rightX + 140, rightY, { width: 80, align: "right" });
+        rightY += 14;
       });
 
-      doc.fontSize(10).font("Helvetica-Bold").fillColor("#dc2626")
-        .text("Total Deductions", rightX, rightY, { width: 130 })
-        .text(formatCurrency(totalDeductions), rightX + 130, rightY, { width: 80, align: "right" });
+      doc.fontSize(9).font("Helvetica-Bold").fillColor("#dc2626")
+        .text("Total Deductions", rightX, rightY, { width: 140 })
+        .text(formatCurrency(totalDeductions), rightX + 140, rightY, { width: 80, align: "right" });
 
-      // Move to after both columns
-      currentY = Math.max(leftY, rightY) + 30;
+      currentY = Math.max(leftY, rightY) + 15;
 
-      // Attendance Summary
-      doc.fontSize(11).font("Helvetica-Bold").fillColor("#E11D26").text("Attendance Summary", 50, currentY);
-      currentY += 20;
+      // Attendance Summary - single row
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#E11D26").text("Attendance Summary", 40, currentY);
+      currentY += 14;
 
-      const attendanceInfo = [
-        ["Present Days:", (payrollRecord.totalPresentDays ?? 0).toString()],
-        ["Absent Days:", (payrollRecord.totalAbsentDays ?? 0).toString()],
-        ["Late Days:", (payrollRecord.totalLateDays ?? 0).toString()],
-        ["Overtime Hours:", payrollRecord.totalOvertimeHours || "0"]
+      const attData = [
+        ["Present:", (payrollRecord.totalPresentDays ?? 0).toString()],
+        ["Absent:", (payrollRecord.totalAbsentDays ?? 0).toString()],
+        ["Late:", (payrollRecord.totalLateDays ?? 0).toString()],
+        ["OT Hours:", payrollRecord.totalOvertimeHours || "0"]
       ];
-
-      const attColWidth = 125;
-      attendanceInfo.forEach(([label, value], index) => {
-        const xPos = 50 + (index % 4) * attColWidth;
-        const yPos = currentY + Math.floor(index / 4) * 20;
-        doc.fontSize(9).fillColor("#000000")
-          .text(label, xPos, yPos, { width: 90, continued: false })
-          .font("Helvetica-Bold").text(value, xPos + 75, yPos);
+      
+      attData.forEach(([label, value], i) => {
+        const xPos = 40 + i * 130;
+        doc.fontSize(8).font("Helvetica").fillColor("#666666").text(label, xPos, currentY, { width: 45 });
+        doc.font("Helvetica-Bold").fillColor("#000000").text(value, xPos + 45, currentY, { width: 70 });
       });
+
+      currentY += 25;
+
+      // Net Salary Box (compact)
+      doc.rect(40, currentY, 515, 35).fillAndStroke("#E11D26", "#E11D26");
+      doc.fontSize(12).fillColor("#FFFFFF").font("Helvetica-Bold")
+        .text("Net Salary:", 55, currentY + 10)
+        .text(formatCurrency(payrollRecord.netSalary || "0"), 400, currentY + 10, { width: 140, align: "right" });
+
+      currentY += 50;
+
+      // Signature Section (compact)
+      doc.fontSize(9).fillColor("#000000").font("Helvetica")
+        .text("_____________________", 80, currentY)
+        .text("Employee Signature", 80, currentY + 12, { width: 120, align: "center" })
+        .text("_____________________", 380, currentY)
+        .text("Authorized Signature", 380, currentY + 12, { width: 120, align: "center" });
 
       currentY += 40;
 
-      // Net Salary Box
-      doc.rect(50, currentY, 495, 40).fillAndStroke("#E11D26", "#E11D26");
-      doc.fontSize(14).fillColor("#FFFFFF").font("Helvetica-Bold")
-        .text("Net Salary:", 60, currentY + 12)
-        .text(formatCurrency(payrollRecord.netSalary || "0"), 400, currentY + 12, { align: "right" });
+      // Footer Note (compact)
+      doc.fontSize(7).fillColor("#888888")
+        .text("This is a computer-generated salary slip and does not require a physical signature.", 40, currentY, { width: 515, align: "center" })
+        .text("For any queries, please contact HR Department at info@maxtechbd.com", 40, currentY + 10, { width: 515, align: "center" });
 
-      currentY += 60;
-
-      // Signature Section
-      if (currentY > 650) {
-        doc.addPage();
-        currentY = 50;
-      }
-
-      doc.fontSize(10).fillColor("#000000").font("Helvetica")
-        .text("_____________________", 100, currentY + 40)
-        .text("Employee Signature", 100, currentY + 60, { align: "center", width: 120 })
-        .text("_____________________", 350, currentY + 40)
-        .text("Authorized Signature", 350, currentY + 60, { align: "center", width: 120 });
-
-      currentY += 100;
-
-      // Footer Note
-      doc.fontSize(8).fillColor("#666666")
-        .text("This is a computer-generated salary slip and does not require a physical signature.", 50, currentY, { align: "center" })
-        .text("For any queries, please contact HR Department at info@maxtechbd.com", 50, currentY + 12, { align: "center" });
-
-      // Add footer
-      addReportFooter(doc);
+      // Simple footer line
+      doc.moveTo(40, 780).lineTo(555, 780).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+      doc.fontSize(7).fillColor("#888888").text("MaxTech BD | Smart Agency Control Hub", 40, 785, { width: 515, align: "center" });
 
       // Stream to response
       res.setHeader("Content-Type", "application/pdf");
