@@ -44,6 +44,7 @@ import PaymentReceipt from "@/pages/payment-receipt";
 import HRAttendanceReport from "@/pages/hr-attendance-report";
 import LeaveSummaryReport from "@/pages/leave-summary-report";
 import OfficeSettings from "@/pages/office-settings";
+import ProjectCredentials from "@/pages/project-credentials";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
@@ -120,6 +121,7 @@ function AppRouter() {
       <Route path="/projects" component={() => <ProtectedRoute component={Projects} />} />
       <Route path="/tasks" component={() => <ProtectedRoute component={Tasks} />} />
       <Route path="/team" component={() => <ProtectedRoute component={Team} />} />
+      <Route path="/project-credentials" component={() => <ProtectedRouteWithRoles component={ProjectCredentials} allowedRoles={["admin", "operational_head"]} />} />
       <Route path="/attendance" component={() => <ProtectedRoute component={AttendancePage} />} />
       <Route path="/finance" component={() => <ProtectedRoute component={Finance} />} />
       <Route path="/invoices" component={() => <ProtectedRoute component={Invoices} />} />

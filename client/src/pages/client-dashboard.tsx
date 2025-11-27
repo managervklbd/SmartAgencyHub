@@ -1,9 +1,12 @@
-import { Briefcase, FileText, DollarSign, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Briefcase, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Globe, Key, Database, Play, Video, ExternalLink, Copy, Check, Server, Image as ImageIcon } from "lucide-react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { type Project, type Invoice, type Payment } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { type Project, type Invoice, type Payment, type ProjectCredentials } from "@shared/schema";
 
 interface ClientDashboardStats {
   totalProjects: number;
@@ -16,6 +19,9 @@ interface ClientDashboardStats {
 }
 
 export default function ClientDashboard() {
+  const { toast } = useToast();
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
   const { data: stats, isLoading: statsLoading } = useQuery<ClientDashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
@@ -31,6 +37,21 @@ export default function ClientDashboard() {
   const { data: payments } = useQuery<Payment[]>({
     queryKey: ["/api/payments"],
   });
+
+  const { data: credentials } = useQuery<ProjectCredentials[]>({
+    queryKey: ["/api/project-credentials/client"],
+  });
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast({ title: "Copied to clipboard" });
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast({ title: "Failed to copy", variant: "destructive" });
+    }
+  };
 
   const kpis = [
     {
@@ -223,6 +244,176 @@ export default function ClientDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {credentials && credentials.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Your Project Credentials</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {credentials.map((credential) => (
+              <Card key={credential.id} data-testid={`credential-card-${credential.id}`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start gap-3">
+                    {credential.thumbnailUrl ? (
+                      <img 
+                        src={`/${credential.thumbnailUrl}`} 
+                        alt={credential.projectName}
+                        className="h-14 w-14 rounded-md object-cover border"
+                        data-testid={`credential-thumbnail-${credential.id}`}
+                      />
+                    ) : (
+                      <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center">
+                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base" data-testid={`credential-name-${credential.id}`}>
+                        {credential.projectName}
+                      </CardTitle>
+                      {credential.hostingPlatform && (
+                        <Badge variant="secondary" className="mt-1">
+                          <Server className="h-3 w-3 mr-1" />
+                          {credential.hostingPlatform}
+                        </Badge>
+                      )}
+                      {credential.shortDescription && (
+                        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                          {credential.shortDescription}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    {credential.liveLink && (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                          <Globe className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Live Website</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => copyToClipboard(credential.liveLink!, `live-${credential.id}`)}
+                            data-testid={`button-copy-live-${credential.id}`}
+                          >
+                            {copiedField === `live-${credential.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => window.open(credential.liveLink!, "_blank")}
+                            data-testid={`button-open-live-${credential.id}`}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {credential.adminPanelLink && (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                          <Key className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Admin Panel</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => copyToClipboard(credential.adminPanelLink!, `admin-${credential.id}`)}
+                            data-testid={`button-copy-admin-${credential.id}`}
+                          >
+                            {copiedField === `admin-${credential.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => window.open(credential.adminPanelLink!, "_blank")}
+                            data-testid={`button-open-admin-${credential.id}`}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {credential.databaseUrl && (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                          <Database className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Database URL</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => copyToClipboard(credential.databaseUrl!, `db-${credential.id}`)}
+                          data-testid={`button-copy-db-${credential.id}`}
+                        >
+                          {copiedField === `db-${credential.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </Button>
+                      </div>
+                    )}
+
+                    {credential.serverCredentials && (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                          <Server className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Server Credentials</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => copyToClipboard(credential.serverCredentials!, `server-${credential.id}`)}
+                          data-testid={`button-copy-server-${credential.id}`}
+                        >
+                          {copiedField === `server-${credential.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {(credential.shortVideoUrl || credential.fullVideoUrl) && (
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      {credential.shortVideoUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => window.open(credential.shortVideoUrl!, "_blank")}
+                          data-testid={`button-short-video-${credential.id}`}
+                        >
+                          <Play className="h-3 w-3 mr-1" />
+                          Presentable Video
+                        </Button>
+                      )}
+                      {credential.fullVideoUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => window.open(credential.fullVideoUrl!, "_blank")}
+                          data-testid={`button-full-video-${credential.id}`}
+                        >
+                          <Video className="h-3 w-3 mr-1" />
+                          Full Features Demo
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

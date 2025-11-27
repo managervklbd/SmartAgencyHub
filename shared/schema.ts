@@ -453,6 +453,41 @@ export const performanceScores = pgTable("performance_scores", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Hosting platform options for project credentials
+export const HOSTING_PLATFORMS = [
+  "Render",
+  "Replit",
+  "Namecheap",
+  "VPS",
+  "Shared Hosting",
+  "AWS",
+  "DigitalOcean",
+  "Vercel",
+  "Netlify",
+  "Heroku",
+  "Other",
+] as const;
+
+// Project Credentials Manager - stores software project credentials, hosting details, and video links
+export const projectCredentials = pgTable("project_credentials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectName: text("project_name").notNull(),
+  clientId: varchar("client_id").references(() => clients.id),
+  hostingPlatform: text("hosting_platform"),
+  liveLink: text("live_link"),
+  adminPanelLink: text("admin_panel_link"),
+  databaseUrl: text("database_url"),
+  serverCredentials: text("server_credentials"),
+  thumbnailUrl: text("thumbnail_url"),
+  shortDescription: text("short_description"),
+  additionalNotes: text("additional_notes"),
+  shortVideoUrl: text("short_video_url"),
+  fullVideoUrl: text("full_video_url"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert Schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -731,6 +766,12 @@ export const insertPerformanceScoreSchema = createInsertSchema(performanceScores
   createdAt: true,
 });
 
+export const insertProjectCredentialsSchema = createInsertSchema(projectCredentials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -832,3 +873,6 @@ export type SalaryAdjustment = typeof salaryAdjustments.$inferSelect;
 
 export type InsertPerformanceScore = z.infer<typeof insertPerformanceScoreSchema>;
 export type PerformanceScore = typeof performanceScores.$inferSelect;
+
+export type InsertProjectCredentials = z.infer<typeof insertProjectCredentialsSchema>;
+export type ProjectCredentials = typeof projectCredentials.$inferSelect;

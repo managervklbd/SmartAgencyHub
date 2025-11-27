@@ -31,6 +31,7 @@ import {
   salaryStructure,
   deviceLogs,
   hrSettings,
+  projectCredentials,
   insertUserSchema,
   insertLeadSchema,
   insertLeadEmailSchema,
@@ -48,8 +49,10 @@ import {
   insertInvoiceSchema,
   insertPaymentSchema,
   insertNotificationSchema,
+  insertProjectCredentialsSchema,
   LEAD_EMAIL_TEMPLATES,
   DEFAULT_LEAD_CATEGORIES,
+  HOSTING_PLATFORMS,
 } from "@shared/schema";
 import { authenticateToken, generateToken, type AuthRequest } from "./middleware/auth";
 import { auditLog, auditMiddleware } from "./middleware/audit";
@@ -9619,6 +9622,259 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
+  });
+
+  // ===== PROJECT CREDENTIALS MANAGER (Admin Only) =====
+  // Get all project credentials - Admin only (with client info)
+  app.get("/api/project-credentials", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      // Only admin can access all credentials
+      if (!["admin", "operational_head"].includes(req.userRole!)) {
+        return res.status(403).json({ error: "Access denied. Admin only." });
+      }
+
+      const allCredentials = await db
+        .select({
+          id: projectCredentials.id,
+          projectName: projectCredentials.projectName,
+          clientId: projectCredentials.clientId,
+          hostingPlatform: projectCredentials.hostingPlatform,
+          liveLink: projectCredentials.liveLink,
+          adminPanelLink: projectCredentials.adminPanelLink,
+          databaseUrl: projectCredentials.databaseUrl,
+          serverCredentials: projectCredentials.serverCredentials,
+          thumbnailUrl: projectCredentials.thumbnailUrl,
+          shortDescription: projectCredentials.shortDescription,
+          additionalNotes: projectCredentials.additionalNotes,
+          shortVideoUrl: projectCredentials.shortVideoUrl,
+          fullVideoUrl: projectCredentials.fullVideoUrl,
+          createdBy: projectCredentials.createdBy,
+          createdAt: projectCredentials.createdAt,
+          updatedAt: projectCredentials.updatedAt,
+          clientName: clients.name,
+          clientEmail: clients.email,
+          clientCompany: clients.company,
+        })
+        .from(projectCredentials)
+        .leftJoin(clients, eq(projectCredentials.clientId, clients.id))
+        .orderBy(desc(projectCredentials.createdAt));
+
+      res.json(allCredentials);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get project credentials for a specific client (Client Portal)
+  app.get("/api/project-credentials/client", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      // Get user's clientId
+      const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+      
+      if (!user?.clientId) {
+        return res.status(403).json({ error: "No client associated with this user" });
+      }
+
+      // Fetch credentials for the client's projects only
+      const clientCredentials = await db
+        .select({
+          id: projectCredentials.id,
+          projectName: projectCredentials.projectName,
+          hostingPlatform: projectCredentials.hostingPlatform,
+          liveLink: projectCredentials.liveLink,
+          adminPanelLink: projectCredentials.adminPanelLink,
+          databaseUrl: projectCredentials.databaseUrl,
+          serverCredentials: projectCredentials.serverCredentials,
+          thumbnailUrl: projectCredentials.thumbnailUrl,
+          shortDescription: projectCredentials.shortDescription,
+          shortVideoUrl: projectCredentials.shortVideoUrl,
+          fullVideoUrl: projectCredentials.fullVideoUrl,
+        })
+        .from(projectCredentials)
+        .where(eq(projectCredentials.clientId, user.clientId))
+        .orderBy(desc(projectCredentials.createdAt));
+
+      res.json(clientCredentials);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get single project credential
+  app.get("/api/project-credentials/:id", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const [credential] = await db
+        .select({
+          id: projectCredentials.id,
+          projectName: projectCredentials.projectName,
+          clientId: projectCredentials.clientId,
+          hostingPlatform: projectCredentials.hostingPlatform,
+          liveLink: projectCredentials.liveLink,
+          adminPanelLink: projectCredentials.adminPanelLink,
+          databaseUrl: projectCredentials.databaseUrl,
+          serverCredentials: projectCredentials.serverCredentials,
+          thumbnailUrl: projectCredentials.thumbnailUrl,
+          shortDescription: projectCredentials.shortDescription,
+          additionalNotes: projectCredentials.additionalNotes,
+          shortVideoUrl: projectCredentials.shortVideoUrl,
+          fullVideoUrl: projectCredentials.fullVideoUrl,
+          createdBy: projectCredentials.createdBy,
+          createdAt: projectCredentials.createdAt,
+          updatedAt: projectCredentials.updatedAt,
+          clientName: clients.name,
+        })
+        .from(projectCredentials)
+        .leftJoin(clients, eq(projectCredentials.clientId, clients.id))
+        .where(eq(projectCredentials.id, req.params.id))
+        .limit(1);
+
+      if (!credential) {
+        return res.status(404).json({ error: "Credential not found" });
+      }
+
+      // Check permissions
+      if (req.userRole === "client") {
+        const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+        if (!user?.clientId || credential.clientId !== user.clientId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      } else if (!["admin", "operational_head"].includes(req.userRole!)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      res.json(credential);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create project credential - Admin only
+  app.post("/api/project-credentials", authenticateToken, upload.single("thumbnail"), auditMiddleware("create", "project_credentials"), async (req: AuthRequest, res) => {
+    try {
+      // Only admin can create credentials
+      if (!["admin", "operational_head"].includes(req.userRole!)) {
+        return res.status(403).json({ error: "Access denied. Admin only." });
+      }
+
+      const data = { ...req.body };
+      
+      // Handle thumbnail upload
+      if (req.file) {
+        const uploadDir = "uploads/thumbnails";
+        await fs.mkdir(uploadDir, { recursive: true });
+        const newPath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
+        await fs.rename(req.file.path, newPath);
+        data.thumbnailUrl = newPath;
+      }
+
+      data.createdBy = req.userId;
+
+      const validated = insertProjectCredentialsSchema.parse(data);
+      
+      const [newCredential] = await db
+        .insert(projectCredentials)
+        .values(validated)
+        .returning();
+
+      res.status(201).json(newCredential);
+    } catch (error: any) {
+      console.error("Error creating project credential:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Update project credential - Admin only
+  app.patch("/api/project-credentials/:id", authenticateToken, upload.single("thumbnail"), auditMiddleware("update", "project_credentials"), async (req: AuthRequest, res) => {
+    try {
+      // Only admin can update credentials
+      if (!["admin", "operational_head"].includes(req.userRole!)) {
+        return res.status(403).json({ error: "Access denied. Admin only." });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(projectCredentials)
+        .where(eq(projectCredentials.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Credential not found" });
+      }
+
+      const data = { ...req.body };
+      
+      // Handle thumbnail upload
+      if (req.file) {
+        const uploadDir = "uploads/thumbnails";
+        await fs.mkdir(uploadDir, { recursive: true });
+        const newPath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
+        await fs.rename(req.file.path, newPath);
+        
+        // Delete old thumbnail if it exists
+        if (existing.thumbnailUrl) {
+          try {
+            await fs.unlink(existing.thumbnailUrl);
+          } catch (e) {
+            console.error("Error deleting old thumbnail:", e);
+          }
+        }
+        
+        data.thumbnailUrl = newPath;
+      }
+
+      data.updatedAt = new Date();
+
+      const [updated] = await db
+        .update(projectCredentials)
+        .set(data)
+        .where(eq(projectCredentials.id, req.params.id))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating project credential:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Delete project credential - Admin only
+  app.delete("/api/project-credentials/:id", authenticateToken, auditMiddleware("delete", "project_credentials"), async (req: AuthRequest, res) => {
+    try {
+      // Only admin can delete credentials
+      if (!["admin", "operational_head"].includes(req.userRole!)) {
+        return res.status(403).json({ error: "Access denied. Admin only." });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(projectCredentials)
+        .where(eq(projectCredentials.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Credential not found" });
+      }
+
+      // Delete thumbnail if it exists
+      if (existing.thumbnailUrl) {
+        try {
+          await fs.unlink(existing.thumbnailUrl);
+        } catch (e) {
+          console.error("Error deleting thumbnail:", e);
+        }
+      }
+
+      await db.delete(projectCredentials).where(eq(projectCredentials.id, req.params.id));
+      
+      res.json({ message: "Project credential deleted successfully" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get hosting platforms list
+  app.get("/api/hosting-platforms", authenticateToken, async (req: AuthRequest, res) => {
+    res.json(HOSTING_PLATFORMS);
   });
 
   // Messages - Unified Inbox Support

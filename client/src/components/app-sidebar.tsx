@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, UserPlus, Briefcase, CheckSquare, UsersRound, Clock, DollarSign, FileText, CreditCard, Upload, MessageSquare, FileCheck, Settings, LogOut, UserCog, Building2, Fingerprint, CalendarDays, Wallet, PieChart, FolderOpen, Receipt, TrendingUp, BookOpen, ClipboardList, ChevronDown, ChevronRight, User } from "lucide-react";
+import { LayoutDashboard, Users, UserPlus, Briefcase, CheckSquare, UsersRound, Clock, DollarSign, FileText, CreditCard, Upload, MessageSquare, FileCheck, Settings, LogOut, UserCog, Building2, Fingerprint, CalendarDays, Wallet, PieChart, FolderOpen, Receipt, TrendingUp, BookOpen, ClipboardList, ChevronDown, ChevronRight, User, KeyRound } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import logoImage from "@assets/Untitled design (1)_1763794635122.png";
@@ -55,6 +55,12 @@ const mainMenuItems = [
     title: "Team",
     url: "/team",
     icon: UsersRound,
+    roles: ["admin", "operational_head"],
+  },
+  {
+    title: "Project Credentials",
+    url: "/project-credentials",
+    icon: KeyRound,
     roles: ["admin", "operational_head"],
   },
 ];

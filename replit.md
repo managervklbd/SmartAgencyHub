@@ -37,7 +37,8 @@ The sidebar features bold uppercase section headers, expandable/collapsible sub-
 ### Feature Specifications
 - **Core Modules**: Authentication, Dashboard, CRM (Leads, Clients), Projects, Tasks, Staff Attendance, Finance (Income/Expenses), Invoices, Unified Inbox Chat, Files, Audit Logs, Client Portal.
 - **Floating Chat Widget (Unified Inbox)**: Intercom-style unified inbox accessible from all pages via a floating button. All roles see unified inbox: Admins see all project messages; Developers see messages from assigned projects; Clients see ALL messages (including admin/team replies) from their own projects. Auto-routes replies to correct project. Uses React Portal.
-- **Client Portal**: Dedicated dashboard for client role with filtered access to projects, invoices, payments, and files. Data access is strictly controlled to their specific projects via `clientId`.
+- **Client Portal**: Dedicated dashboard for client role with filtered access to projects, invoices, payments, files, and project credentials. Data access is strictly controlled to their specific projects via `clientId`.
+- **Project Credentials Manager**: Dedicated separate section (not inside Projects) for admin/operational_head to manage software project credentials including: hosting platform, live link, admin panel link, database URL, server credentials, thumbnail image, short description, notes, and YouTube video URLs. Features thumbnail upload via multer, two video types (Short Presentable 1-2min, Full Features Demo), and full CRUD operations. Clients see their project credentials in the Client Portal with copy-to-clipboard functionality and video buttons.
 - **Access Control**: Robust RBAC implemented across all endpoints with the following role-based permissions:
   - **Admin**: Full unrestricted access to all projects, files, and system resources
   - **Operational Head**: Full unrestricted access to all projects and files (management/supervisor role)
