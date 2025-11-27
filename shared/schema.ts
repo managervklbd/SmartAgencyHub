@@ -722,6 +722,10 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
       z.date()
     ]).transform(parseRequiredDate)
   ),
+  totalDays: z.preprocess(
+    (val) => (typeof val === "number" ? String(val) : val),
+    z.string().min(1, "Total days is required")
+  ),
 });
 
 export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances).omit({
