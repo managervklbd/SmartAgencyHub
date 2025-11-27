@@ -529,6 +529,83 @@ export function registerHrPayrollRoutes(
     }
   });
 
+  // Approve leave request
+  app.post("/api/leave-requests/:id/approve", authenticateToken, auditMiddleware("update", "leave_request"), async (req: AuthRequest, res) => {
+    try {
+      // Only admin and operational_head can approve
+      if (req.userRole !== "admin" && req.userRole !== "operational_head") {
+        return res.status(403).json({ error: "Only admins and operational heads can approve leave requests" });
+      }
+
+      const [existing] = await db.select()
+        .from(leaveRequests)
+        .where(eq(leaveRequests.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Leave request not found" });
+      }
+
+      // Prevent self-approval
+      if (existing.employeeId === req.userId) {
+        return res.status(403).json({ error: "You cannot approve your own leave request" });
+      }
+
+      const [updated] = await db.update(leaveRequests)
+        .set({
+          status: "approved",
+          approvedBy: req.userId,
+          approvedAt: new Date(),
+        })
+        .where(eq(leaveRequests.id, req.params.id))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Reject leave request
+  app.post("/api/leave-requests/:id/reject", authenticateToken, auditMiddleware("update", "leave_request"), async (req: AuthRequest, res) => {
+    try {
+      // Only admin and operational_head can reject
+      if (req.userRole !== "admin" && req.userRole !== "operational_head") {
+        return res.status(403).json({ error: "Only admins and operational heads can reject leave requests" });
+      }
+
+      const [existing] = await db.select()
+        .from(leaveRequests)
+        .where(eq(leaveRequests.id, req.params.id))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Leave request not found" });
+      }
+
+      // Prevent self-rejection
+      if (existing.employeeId === req.userId) {
+        return res.status(403).json({ error: "You cannot reject your own leave request" });
+      }
+
+      const { rejectionReason } = req.body;
+
+      const [updated] = await db.update(leaveRequests)
+        .set({
+          status: "rejected",
+          approvedBy: req.userId,
+          approvedAt: new Date(),
+          rejectionReason: rejectionReason || null,
+        })
+        .where(eq(leaveRequests.id, req.params.id))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Leave Balances
   app.get("/api/leave-balances", authenticateToken, async (req: AuthRequest, res) => {
     try {
