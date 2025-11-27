@@ -500,10 +500,12 @@ class SerpApiService {
       console.log(`Geocoded "${location}" to ${coordinates}`);
 
       const RAW_PER_CALL = 20; // Google Maps returns 20 per call
-      const MAX_PAGES = 15; // Safety limit: max 300 raw results (15 × 20)
+      // Increased limit to fetch more results - Google Maps can return up to 500+ results for popular queries
+      const MAX_PAGES = 50; // Safety limit: max 1000 raw results (50 × 20)
       let offset = 0;
       let serpApiTotal = 0;
       let consecutiveEmpty = 0;
+      let totalAPIExhausted = false;
 
       // Keep fetching until API exhausted or max pages reached
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -523,19 +525,31 @@ class SerpApiService {
         this.mergeResults(allResults, mapsResults, seenDomains, seenNames);
         const newAdded = allResults.length - beforeCount;
 
+        console.log(`Page ${page + 1}: Fetched ${mapsResults.length}, Added ${newAdded} new (total: ${allResults.length})`);
+
         offset += RAW_PER_CALL;
 
-        // Stop conditions:
-        // 1. Got fewer results than requested (API exhausted)
-        if (mapsResults.length < RAW_PER_CALL) {
-          console.log(`API exhausted at offset ${offset - RAW_PER_CALL} (got ${mapsResults.length}/${RAW_PER_CALL})`);
+        // Stop condition 1: Got 0 results (API truly exhausted)
+        if (mapsResults.length === 0) {
+          console.log(`API exhausted at offset ${offset - RAW_PER_CALL} (got 0 results)`);
+          totalAPIExhausted = true;
           break;
         }
 
-        // 2. No new unique results in 2 consecutive calls (all duplicates)
+        // Stop condition 2: Got fewer results than requested (API nearly exhausted)
+        // But continue a bit more in case there are more results at next offset
+        if (mapsResults.length < RAW_PER_CALL) {
+          console.log(`API partial at offset ${offset - RAW_PER_CALL} (got ${mapsResults.length}/${RAW_PER_CALL})`);
+          // Don't break immediately - try one more page
+          if (page > 0) {
+            consecutiveEmpty++;
+          }
+        }
+
+        // Stop condition 3: No new unique results in 3 consecutive calls (more lenient)
         if (newAdded === 0) {
           consecutiveEmpty++;
-          if (consecutiveEmpty >= 2) {
+          if (consecutiveEmpty >= 3) {
             console.log(`Stopping: No new unique results for ${consecutiveEmpty} consecutive calls`);
             break;
           }
@@ -543,9 +557,10 @@ class SerpApiService {
           consecutiveEmpty = 0;
         }
 
-        // 3. Reached API's reported total
-        if (serpApiTotal > 0 && offset >= serpApiTotal) {
-          console.log(`Reached API's reported total: ${serpApiTotal}`);
+        // Stop condition 4: Reached API's reported total (with buffer)
+        // Add 20% buffer since API's total is often inaccurate
+        if (serpApiTotal > 0 && offset >= serpApiTotal * 1.2) {
+          console.log(`Reached beyond API's reported total: ${serpApiTotal}`);
           break;
         }
 
@@ -553,12 +568,12 @@ class SerpApiService {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      // Filter for qualified businesses
+      // Filter for qualified businesses (at least one contact method)
       const filtered = allResults.filter(business => 
         business.email || business.phone || business.website || business.address
       );
 
-      console.log(`SerpAPI Search All: Raw=${allResults.length}, Qualified=${filtered.length}, Offset=${offset}`);
+      console.log(`SerpAPI Search All Complete: Raw=${allResults.length}, Qualified=${filtered.length}, Offset=${offset}, APITotal=${serpApiTotal}`);
 
       return {
         results: filtered,

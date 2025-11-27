@@ -925,42 +925,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
+          // Helper function to normalize website URL for comparison
+          const normalizeWebsite = (url: string | null): string | null => {
+            if (!url) return null;
+            return url.toLowerCase()
+              .replace(/^https?:\/\//, '')  // Remove http:// or https://
+              .replace(/^www\./, '')         // Remove www.
+              .replace(/\/+$/, '')           // Remove trailing slashes
+              .trim();
+          };
+
+          // Helper function to normalize business name for comparison
+          const normalizeBusinessName = (businessName: string): string => {
+            return businessName.toLowerCase().trim()
+              .replace(/[.,\-''"]/g, '')     // Remove punctuation
+              .replace(/\s+/g, ' ')           // Collapse multiple spaces
+              .replace(/\s*(ltd|llc|inc|corp|co|company|limited|pvt|private|incorporated|corporation)\.?\s*$/i, '')
+              .trim();
+          };
+
           // Check for duplicates by email, website, OR business name
           let isDuplicate = false;
           let duplicateReason = "";
 
-          // 1. Check by email
+          // 1. Check by email (exact match, case-insensitive)
           if (email) {
-            const existingByEmail = await db.select().from(leads).where(eq(leads.email, email)).limit(1);
+            const existingByEmail = await db.select().from(leads).where(
+              sql`LOWER(${leads.email}) = ${email.toLowerCase()}`
+            ).limit(1);
             if (existingByEmail.length > 0) {
               isDuplicate = true;
               duplicateReason = `Email "${email}" already exists`;
             }
           }
 
-          // 2. Check by website
+          // 2. Check by website (normalized: remove http/https, www, trailing slashes)
           if (!isDuplicate && website) {
-            const existingByWebsite = await db.select().from(leads).where(eq(leads.website, website)).limit(1);
-            if (existingByWebsite.length > 0) {
-              isDuplicate = true;
-              duplicateReason = `Website "${website}" already exists`;
+            const normalizedWebsite = normalizeWebsite(website);
+            if (normalizedWebsite) {
+              // Check both exact match and normalized match
+              const existingByWebsite = await db.select().from(leads).where(
+                sql`LOWER(REGEXP_REPLACE(REGEXP_REPLACE(COALESCE(${leads.website}, ''), '^https?://', ''), '^www\.', '')) LIKE ${normalizedWebsite + '%'}`
+              ).limit(1);
+              if (existingByWebsite.length > 0) {
+                isDuplicate = true;
+                duplicateReason = `Website "${website}" already exists (similar to "${existingByWebsite[0].website}")`;
+              }
             }
           }
 
-          // 3. Check by business name (normalized: lowercase, trim, remove common punctuation)
+          // 3. Check by business name (normalized: lowercase, trim, remove common suffixes)
           if (!isDuplicate && name) {
-            // Normalize the name: lowercase, trim, remove periods and common suffixes
-            const normalizedName = name.toLowerCase().trim()
-              .replace(/[.,\-]/g, '')
-              .replace(/\s+/g, ' ')
-              .replace(/\s*(ltd|llc|inc|corp|co|company|limited|pvt|private)\.?\s*$/i, '');
+            const normalizedName = normalizeBusinessName(name);
             
-            const existingByName = await db.select().from(leads).where(
-              sql`LOWER(REGEXP_REPLACE(REGEXP_REPLACE(${leads.name}, '[.,\-]', '', 'g'), '\s*(ltd|llc|inc|corp|co|company|limited|pvt|private)\.?\s*$', '', 'i')) = ${normalizedName}`
-            ).limit(1);
-            if (existingByName.length > 0) {
+            // Fetch all leads and check in JS for more reliable matching
+            // (SQL regex can be tricky with escaping)
+            const allLeads = await db.select({ id: leads.id, name: leads.name }).from(leads);
+            const matchingLead = allLeads.find(existing => 
+              normalizeBusinessName(existing.name) === normalizedName
+            );
+            
+            if (matchingLead) {
               isDuplicate = true;
-              duplicateReason = `Business name "${name}" already exists (similar to "${existingByName[0].name}")`;
+              duplicateReason = `Business name "${name}" already exists (similar to "${matchingLead.name}")`;
             }
           }
 
