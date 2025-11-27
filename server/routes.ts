@@ -6451,15 +6451,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const monthNames = ["January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"];
 
-      // Add header
-      addReportHeader({
+      // Add header and get the Y position after the header
+      const headerEndY = addReportHeader({
         doc,
         title: "Salary Slip",
         subtitle: `${monthNames[month - 1]} ${year}`,
         includeDate: true
       });
 
-      let currentY = 120;
+      let currentY = headerEndY + 10;
 
       // Employee Information Section
       doc.fontSize(11).fillColor("#E11D26").text("Employee Information", 50, currentY);
